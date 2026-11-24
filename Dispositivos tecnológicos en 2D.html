@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dispositivos tecnológicos en 2D</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light;--card:#f3f3f3;--line:#c9c9c9;--tx:#111;--mut:#555}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:#fff;color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 14px 40px}
+h1{margin:0;font-size:clamp(1.6rem,4.5vw,2.4rem);letter-spacing:-.5px}
+.sub{color:var(--mut);margin:2px 0 12px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tab{border:2px solid #111;background:#fff;color:#111;padding:6px 12px;border-radius:999px;cursor:pointer;font:inherit;font-weight:700;font-size:.9rem}
+.tab.on{background:#111;color:#fff}
+.grid{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+#vp{aspect-ratio:16/10;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+#sim{width:100%;height:100%;display:block}
+h2{margin:0 0 4px;font-size:1.25rem}h3{margin:12px 0 4px;font-size:1rem}
+.law{border-left:5px solid #111;padding-left:10px;margin:6px 0 8px}
+ol,ul{margin:4px 0;padding-left:20px}li{margin:2px 0;font-size:.95rem}
+.eq{font:700 1rem ui-monospace,Consolas,monospace;background:#fff;border:2px solid #111;border-radius:10px;padding:7px 12px;margin:8px 0;overflow-x:auto;white-space:nowrap}
+.ctl{display:flex;align-items:center;gap:10px;margin:10px 0 4px;flex-wrap:wrap}
+.ctl label{min-width:160px;color:var(--mut);font-size:.92rem}
+input[type=range]{flex:1;min-width:120px;accent-color:#111}
+.val{font:700 .95rem ui-monospace,Consolas,monospace;min-width:80px;text-align:right}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:8px}
+.read div{background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:.8rem;color:var(--mut)}
+.read strong{display:block;font:700 1rem ui-monospace,Consolas,monospace;color:var(--tx)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Dispositivos tecnológicos en 2D</h1>
+<p class="sub">Elige un dispositivo, mira cómo funciona y mueve el control para ver qué cambia.</p>
+<div class="tabs" id="tabs"></div>
+<div class="grid">
+  <div class="card">
+    <div id="vp"><canvas id="sim"></canvas></div>
+    <div class="ctl"><label for="sl" id="sll"></label><input type="range" id="sl"><span class="val" id="slv"></span></div>
+    <div class="read" id="read"></div>
+  </div>
+  <div class="card" id="info"></div>
+</div>
+</div>
+<script>
+const TAU=Math.PI*2,$=id=>document.getElementById(id),cv=$('sim'),g=cv.getContext('2d');
+let t=0,cur=0,p=0,S={},s=1;const W=100,H=62.5;
+const ln=(a,b,c,d,w=.3,col='#111',dash)=>{g.beginPath();g.setLineDash(dash?[dash,dash]:[]);g.lineWidth=w;g.strokeStyle=col;g.moveTo(a,b);g.lineTo(c,d);g.stroke();g.setLineDash([])};
+const ci=(x,y,r,f,st,w=.25)=>{g.beginPath();g.arc(x,y,r,0,7);if(f){g.fillStyle=f;g.fill()}if(st){g.lineWidth=w;g.strokeStyle=st;g.stroke()}};
+const tx=(q,x,y,sz=3,col='#111',al='center',wt=700)=>{g.font=wt+' '+sz+'px system-ui,sans-serif';g.fillStyle=col;g.textAlign=al;g.fillText(q,x,y)};
+const poly=(P,f,st,w=.3)=>{g.beginPath();P.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));g.closePath();if(f){g.fillStyle=f;g.fill()}if(st){g.lineWidth=w;g.strokeStyle=st;g.stroke()}};
+const rc=(x,y,w,h,f,st)=>poly([[x,y],[x+w,y],[x+w,y+h],[x,y+h]],f,st);
+function path(P,w,col,dash){g.beginPath();P.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]));g.lineWidth=w;g.strokeStyle=col;g.setLineDash(dash?[dash,dash]:[]);g.stroke();g.setLineDash([])}
+function along(P,d){for(let i=1;i<P.length;i++){const L=Math.hypot(P[i][0]-P[i-1][0],P[i][1]-P[i-1][1]);if(d<=L)return[P[i-1][0]+(P[i][0]-P[i-1][0])*d/L,P[i-1][1]+(P[i][1]-P[i-1][1])*d/L];d-=L}return P[P.length-1]}
+const plen=P=>P.reduce((a,q,i)=>i?a+Math.hypot(q[0]-P[i-1][0],q[1]-P[i-1][1]):0,0);
+function glass(x,y,h,w,conv){const hf=u=>conv?.3+w*(1-(u/h)**2):.3+w*(u/h)**2;g.beginPath();for(let u=-h;u<=h;u+=.5)g.lineTo(x-hf(u),y+u);for(let u=h;u>=-h;u-=.5)g.lineTo(x+hf(u),y+u);g.closePath();
+ const gr=g.createLinearGradient(x-w,0,x+w,0);gr.addColorStop(0,'rgba(255,255,255,.9)');gr.addColorStop(.5,'rgba(185,200,212,.45)');gr.addColorStop(1,'rgba(255,255,255,.85)');g.fillStyle=gr;g.fill();g.lineWidth=.3;g.strokeStyle='rgba(40,50,60,.9)';g.stroke()}
+function arr(x,y,h,col='#111',w=1.6){const d=h>=0?-1:1,a=Math.abs(h),hl=Math.min(a*.5,2.2);poly([[x-.3,y],[x-.3,y+d*(a-hl)],[x-w/2,y+d*(a-hl)],[x,y+d*a],[x+w/2,y+d*(a-hl)],[x+.3,y+d*(a-hl)],[x+.3,y]],col)}
+const tower=(x,y,h)=>{poly([[x-2.5,y],[x+2.5,y],[x,y-h]],null,'#111',.4);ln(x-1.5,y-h*.4,x+1.5,y-h*.4,.3);ln(x-.8,y-h*.7,x+.8,y-h*.7,.3);ci(x,y-h-.8,.8,'#111')};
+
+const D=[
+{n:'Radar',sl:{l:'Velocidad de giro',min:.3,max:2,step:.05,v:1,u:' ×'},
+ steps:['Una antena giratoria emite pulsos cortos de ondas de radio.','Si el pulso choca con un avión, un barco o una nube, parte de la energía rebota.','La antena recibe el eco y mide el tiempo que tardó en volver.','Con ese tiempo calcula la distancia; con el giro de la antena, la dirección.'],use:'Control del tráfico aéreo y marítimo, meteorología (lluvia y tormentas), control de velocidad en carreteras y defensa.',f:'d = c · t / 2',
+ draw(){const cx=34,cy=32,R=27,a=t*p*1.3;
+  ci(cx,cy,R,'#f4f5f6','#111',.5);[.33,.66].forEach(k=>ci(cx,cy,R*k,null,'#bbb',.2));ln(cx-R,cy,cx+R,cy,.2,'#bbb');ln(cx,cy-R,cx,cy+R,.2,'#bbb');
+  for(let i=0;i<26;i++){g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,R,a-(i+1)*.04,a-i*.04);g.fillStyle='rgba(0,0,0,'+(1-i/26)*.2+')';g.fill()}
+  ln(cx,cy,cx+R*Math.cos(a),cy+R*Math.sin(a),.5,'#111');
+  const TG=[[.55,.8,.1],[.8,3.4,-.07],[.35,5.2,.15]];let dm=9;
+  TG.forEach(q=>{const an=q[1]+q[2]*t,x=cx+R*q[0]*Math.cos(an),y=cy+R*q[0]*Math.sin(an),df=(((a-an)%TAU)+TAU)%TAU,al=Math.max(0,1-df/(TAU*.92));ci(x,y,1.1,'rgba(0,0,0,'+al+')');if(q[0]<dm)dm=q[0]});
+  ci(cx,cy,1,'#111');tx('Pantalla del radar',cx,cy+R+5,3);
+  const d=dm*150,ms=2*d/300,ph=(t%2.4)/2.4,x0=72,x1=94;
+  rc(x0-3,22,3,6,'#555');poly([[x0,23],[x0+3,21],[x0+3,29],[x0,27]],'#999','#111',.3);
+  poly([[x1,24],[x1+3,25.5],[x1,27],[x1-1.5,25.5]],'#111');ln(x1-3,25.5,x1+3,25.5,.5);
+  ln(x0+3,25,x1-3,25,.2,'#999',1);const px=ph<.5?x0+4+ph*2*(x1-x0-8):x1-4-(ph-.5)*2*(x1-x0-8);ci(px,25,1.4,ph<.5?'#111':'#fff','#111',.4);
+  tx(ph<.5?'Pulso emitido →':'← Eco',83,35,3.2);tx('antena',x0-1,32,2.6,'#555');tx('avión',x1,32,2.6,'#555');
+  tx('t(eco) = 2d / c',83,48,3.2,'#111');tx('c = 300 000 km/s',83,53,2.7,'#555',null,600);
+  return[['Objetivo más cercano',d.toFixed(0)+' km'],['Tiempo del eco',ms.toFixed(2)+' ms']]}},
+{n:'Prismáticos',sl:{l:'Aumento (M)',min:6,max:12,step:1,v:8,u:' ×'},
+ steps:['El objetivo (lente grande) recoge la luz y forma una imagen invertida.','Dos prismas reflejan la luz y la enderezan: la imagen vuelve a verse derecha.','Los prismas también doblan el recorrido y hacen más corto el aparato.','El ocular amplía esa imagen para el ojo: M = f(objetivo) / f(ocular).'],use:'Observación de aves y paisajes, deporte, navegación, caza y astronomía básica.',f:'M = f_objetivo / f_ocular',
+ draw(){const P=[[8,18],[46,18],[46,44],[86,44]],L=plen(P);rc(6,8,88,46,'rgba(0,0,0,.03)','#aaa');
+  path(P,5,'rgba(0,0,0,.12)');path(P,.5,'#111',2);
+  glass(24,18,8,2.2,true);tx('Objetivo',24,8.5,2.8);glass(70,44,5.5,1.7,true);tx('Ocular',70,36,2.8);
+  poly([[40,12],[52,24],[40,24]],'rgba(205,218,228,.8)','#222',.35);poly([[40,38],[52,50],[52,38]],'rgba(205,218,228,.8)','#222',.35);tx('Prisma 1',58,17,2.8,'#333','left');tx('Prisma 2',33,52,2.8,'#333','right');
+  for(let k=0;k<4;k++){const q=along(P,(t*22+k*L/4)%L);ci(q[0],q[1],.9,'#111')}
+  ci(90,44,3.2,'#fff','#111',.4);ci(90.6,44,1.3,'#111');tx('ojo',90,51,2.6,'#555');
+  tx('1 Objeto',16,58.5,2.6,'#111');arr(30,57,5);tx('2 Tras el objetivo',50,58.5,2.6);arr(66,52,-5);
+  tx('3 Tras los prismas',80,58.5,2.6,'#111','left');arr(96,57.5,p*.5,'#111',1.4);
+  return[['Aumento',p+'×'],['Ejemplo','Prismáticos '+p+'×50'],['f(ocular)',(240/p/10).toFixed(1)+' cm (si f objetivo = 24 cm)']]}},
+{n:'Comunicación inalámbrica',sl:{l:'Distancia al emisor',min:10,max:80,step:1,v:30,u:' km'},
+ steps:['El emisor convierte datos (voz, imágenes, bits) en una onda electromagnética.','La onda viaja por el aire a la velocidad de la luz, sin cables.','Se debilita con la distancia: su potencia baja como 1 / d².','El receptor la capta con su antena y recupera los datos.'],use:'Wi-Fi, Bluetooth, radio, televisión, GPS, control remoto y comunicaciones por satélite.',f:'P ∝ 1 / d²    ;    c = λ · f',
+ draw(){const tx0=14,x=14+p,sg=Math.min(1,(15/p)**2);
+  for(let k=0;k<6;k++){const r=(t*14+k*15)%90;g.beginPath();g.arc(tx0,30,r,-1.1,1.1);g.strokeStyle='rgba(0,0,0,'+(1-r/90)*.6+')';g.lineWidth=.4;g.stroke()}
+  tower(tx0,34,16);tx('Emisor',tx0,40,3);
+  for(let i=0;i<4;i++){const d=(t*18+i*(x-tx0)/4)%(x-tx0);rc(tx0+d,29.3,1.6,1.6,'#111')}
+  rc(x-2,26,4,8,'#fff','#111');ln(x-1,26,x-1,23,.4);tx('Receptor',x,40,3);
+  const b=sg>.6?5:sg>.35?4:sg>.2?3:sg>.1?2:sg>.04?1:0;for(let i=0;i<5;i++)rc(x+4+i*1.6,33-i*1.2,1,1.2+i*1.2,i<b?'#111':'#ccc');
+  ln(14,58,94,58,.4,'#333');ln(14,42,14,58,.4,'#333');tx('Potencia',8,48,2.6,'#555');tx('distancia →',90,61,2.6,'#555');
+  path(Array.from({length:81},(q,i)=>[14+i,58-16*Math.min(1,(15/Math.max(i,10))**2)]),.6,'#111');ci(x,58-16*sg,1.4,'#111');
+  return[['Distancia',p+' km'],['Potencia relativa',(sg*100).toFixed(0)+' %'],['Barras',b+' / 5']]}},
+{n:'Teléfono móvil',sl:{l:'Posición del teléfono',min:5,max:95,step:.5,v:15,u:''},
+ steps:['El país se divide en celdas; cada una tiene una antena (estación base).','El teléfono emite y recibe ondas de radio con la estación de mayor señal.','Al desplazarte, el sistema te pasa de una celda a la siguiente (traspaso).','Desde las estaciones, los datos viajan por cable o fibra hasta la red mundial.'],use:'Llamadas, mensajes, internet móvil, ubicación por GPS, pagos y servicios de emergencia.',f:'Celdas: la señal más fuerte manda',
+ draw(){const X=[20,50,80],nm=['A','B','C'],sig=X.map(q=>1/(1+((p-q)/14)**2)),act=sig.indexOf(Math.max(...sig));
+  if(S.act!==undefined&&S.act!==act)S.fl=t;S.act=act;
+  X.forEach((q,i)=>{const P=[0,1,2,3,4,5].map(k=>[q+17*Math.cos(-1.57+k*1.047),30+17*Math.sin(-1.57+k*1.047)]);poly(P,i===act?'rgba(0,0,0,.13)':'rgba(0,0,0,.03)','#555',.35);tower(q,30,9);tx(nm[i],q,40,3.6)});
+  const ph=[p,40];ln(X[act],21,ph[0],ph[1]-4,.5,'#111',1.2);
+  for(let k=0;k<3;k++){const q=along([[X[act],21],[ph[0],ph[1]-4]],((t*16+k*8)%24)/24*Math.hypot(ph[0]-X[act],ph[1]-25));ci(q[0],q[1],.8,'#111')}
+  rc(ph[0]-2.2,ph[1]-4,4.4,8,'#fff','#111');rc(ph[0]-1.7,ph[1]-3,3.4,5,'#ddd');tx('teléfono',ph[0],ph[1]+8,2.6,'#555');
+  tx('Potencia de la señal recibida',50,52,2.8,'#555');sig.forEach((v,i)=>{rc(30+i*16,60-v*7,10,v*7,i===act?'#111':'#aaa');tx(nm[i],35+i*16,61.8,2.4,'#111')});
+  if(S.fl&&t-S.fl<2)tx('¡Traspaso a la celda '+nm[act]+'!',50,8,3.8,'#111');
+  return[['Estación activa','Celda '+nm[act]],['Señal',(sig[act]*100).toFixed(0)+' %']]}},
+{n:'Televisor',sl:{l:'Resolución (columnas)',min:8,max:56,step:1,v:24,u:' px'},
+ steps:['La antena (o internet) trae la señal; el sintonizador elige el canal.','El decodificador convierte los datos en una imagen y un sonido.','La pantalla se refresca línea a línea, muchas veces por segundo.','Cada píxel mezcla tres subpíxeles: rojo, verde y azul, para formar todos los tonos.'],use:'Informar, educar y entretener; también como monitor de computadores y consolas.',f:'Píxeles = columnas × filas',
+ draw(){const N=p,M=Math.round(N*.6),cw=56/N,ch=33.6/M;
+  [['Antena',6,16],['Sintonizador',26,17],['Decodificador',48,19],['Pantalla',72,17]].forEach((q,i,a)=>{rc(q[1],4,q[2],7,'#fff','#111');tx(q[0],q[1]+q[2]/2,8.6,2.6);if(i<3)ln(q[1]+q[2],7.5,a[i+1][1],7.5,.3,'#111')});
+  ci(6+((t*30)%66),7.5,.8,'#111');
+  const img=(u,v)=>{let b=.82;if((u-.78)**2+(v-.25)**2<.012)b=.12;if(v>.75)b=.5;if(u>.2&&u<.55&&v>.5&&v<.75)b=.3;if(v>.3&&v<.5&&Math.abs(u-.375)<(v-.3)*1.2)b=.08;if(u>.33&&u<.42&&v>.6&&v<.75)b=.9;return b};
+  const r=Math.floor((t*12)%M);
+  for(let j=0;j<M;j++)for(let i=0;i<N;i++){const b=img((i+.5)/N,(j+.5)/M),q=Math.round(b*235);rc(6+i*cw,15+j*ch,cw+.03,ch+.03,'rgb('+q+','+q+','+q+')')}
+  rc(6,15+(r+1)*ch,56,33.6-(r+1)*ch,'rgba(255,255,255,.55)');rc(6,15+r*ch,56,ch,'rgba(0,0,0,.25)');
+  rc(6,15,56,33.6,null,'#111');rc(5,14,58,35.6,null,'#555');tx('barrido línea a línea',34,53,2.8,'#555');
+  const b=img(.5,(r+.5)/M),hs=[b,b*.85,b*.62],cl=['#999','#666','#222'];
+  rc(68,15,28,34,'#fff','#aaa');tx('Un píxel ampliado',82,19,2.7);hs.forEach((h,i)=>{rc(71+i*8,44-h*21,6.5,h*21,cl[i]);tx('RGB'[i],74.2+i*8,47.5,2.8)});tx('subpíxeles',82,56,2.6,'#555');
+  return[['Resolución',N+' × '+M],['Píxeles',(N*M).toLocaleString('es')],['Fila refrescada',(r+1)+' / '+M]]}},
+{n:'Radio',sl:{l:'Sintonía (FM)',min:88,max:108,step:.1,v:92,u:' MHz'},
+ steps:['La emisora modula una onda portadora con el sonido (aquí, FM: varía la frecuencia).','La antena capta muchas emisoras a la vez.','Al girar el dial, un circuito resuena sólo con la frecuencia elegida.','El receptor separa el sonido de la portadora y lo envía al altavoz.'],use:'Noticias, música y alertas de emergencia, aun sin internet ni electricidad de red (radios a pilas).',f:'λ = c / f    (ej.: 300 / 98 ≈ 3,06 m)',
+ draw(){const ST=[[92,1.2,'A'],[98,2.3,'B'],[104,3.6,'C']];let A=0,fm=1.2,nm='';ST.forEach(q=>{const a=Math.exp(-(((p-q[0])/.75)**2));if(a>A){A=a;fm=q[1];nm=q[2]}});
+  tower(10,26,15);for(let k=0;k<3;k++){const r=(t*8+k*8)%24;g.beginPath();g.arc(10,11,r,.1,1.5);g.strokeStyle='rgba(0,0,0,'+(1-r/24)*.5+')';g.lineWidth=.4;g.stroke()}tx('Emisora',10,31,2.8);
+  rc(26,5,68,14,'#fff','#111');ln(30,16,90,16,.3,'#333');for(let f=88;f<=108;f+=2){const x=30+(f-88)*3;ln(x,16,x,14.5,.3);tx(f,x,13.4,2.2,'#555',null,600)}
+  ST.forEach(q=>{const x=30+(q[0]-88)*3;tx(q[2],x,9,3)});const nx=30+(p-88)*3;ln(nx,6,nx,17.5,.7,'#111');
+  tx('Señal recibida (portadora modulada)',32,25,2.8,'#555','left');
+  const ys=[];for(let i=0;i<=140;i++){const x=i/140,ph=x*38-t*14,amp=A*6+(1-A)*1.2*(Math.random()-.5);ys.push([26+x*50,35+amp*Math.sin(ph+(A>.15?3*Math.sin(x*TAU*fm*1.6-t*3):Math.random()*4))])}
+  path(ys,.4,'#111');ln(26,35,76,35,.2,'#bbb');
+  tx('Sonido recuperado',32,46.5,2.8,'#555','left');const au=[];for(let i=0;i<=140;i++){const x=i/140;au.push([26+x*50,54+A*5*Math.sin(x*TAU*fm*1.6-t*3)])}path(au,.5,'#111');
+  poly([[84,34],[88,34],[93,29],[93,52],[88,47],[84,47]],'#fff','#111',.4);for(let k=1;k<4;k++){g.beginPath();g.arc(94,40.5,k*2.5,-.8,.8);g.strokeStyle='rgba(0,0,0,'+A*(.8-k*.2)+')';g.lineWidth=.4;g.stroke()}
+  tx(A>.35?'Emisora '+nm:'Sólo ruido',90,58,3.2);
+  return[['Frecuencia',p.toFixed(1)+' MHz'],['Longitud de onda',(300/p).toFixed(2)+' m'],['Intensidad',(A*100).toFixed(0)+' %']]}},
+{n:'Rayo láser',sl:{l:'Bombeo (energía)',min:0,max:100,step:1,v:60,u:' %'},
+ steps:['Una fuente de energía (bombeo) excita los átomos del medio activo.','Un fotón que pasa cerca de un átomo excitado lo obliga a emitir otro idéntico (emisión estimulada).','Dos espejos hacen rebotar los fotones: la luz se amplifica en cada viaje.','Un espejo semitransparente deja salir un haz muy fino, de un solo color y en fase.'],use:'Cirugía y cirugía ocular, lectores de códigos y discos, corte de metales, fibra óptica, medición de distancias.',f:'LASER = Light Amplification by Stimulated Emission of Radiation',
+ draw(dt){if(!S.a){S.a=[];for(let r=0;r<4;r++)for(let c=0;c<8;c++)S.a.push({x:22+c*6,y:25+r*4.2,th:Math.random(),fl:0});S.ph=[];S.out=0;S.vo=[]}
+  const pf=p/100,dtt=Math.min(dt,.05);
+  S.a.forEach(a=>{a.fl=Math.max(0,a.fl-dtt);if(a.th<pf&&Math.random()<dtt*pf*.5)S.ph.push({x:a.x,y:a.y,d:Math.random()<.5?1:-1})});
+  const sat=1-S.ph.length/160;S.out*=Math.pow(.2,dtt);
+  S.ph.forEach(q=>{const ox=q.x;q.x+=q.d*38*dtt;S.a.forEach(a=>{if(a.th<pf&&Math.abs(a.y-q.y)<.1&&((ox<a.x)===(q.x>=a.x))&&Math.random()<.13*sat){S.ph.push({x:q.x,y:q.y,d:q.d});a.fl=.25}})
+   if(q.x>=74){if(Math.random()<.1){S.out+=1;S.vo.push({x:74})}q.d=-1;q.x=73.9;if(Math.random()<.03)q.dead=1}if(q.x<=16){q.d=1;q.x=16.1;if(Math.random()<.03)q.dead=1}});
+  S.ph=S.ph.filter(q=>!q.dead).slice(-170);S.vo.forEach(q=>q.x+=45*dtt);S.vo=S.vo.filter(q=>q.x<98);
+  rc(16,20,58,26,'rgba(0,0,0,.04)','#555');tx('Medio activo',45,18.3,2.8,'#555');
+  rc(13.5,19,2.5,28,'#aaa','#111');rc(74,19,2.5,28,'rgba(210,225,235,.7)','#111');tx('Espejo total',15,52,2.6,'#333');tx('Espejo parcial',75,52,2.6,'#333');
+  S.a.forEach(a=>ci(a.x,a.y,a.fl>0?1.7:1,a.th<pf?'#111':'#fff','#111',.3));
+  S.ph.forEach(q=>{ln(q.x-1,q.y,q.x+1,q.y,.5,'#111')});
+  const bw=Math.min(4,S.out*.12);if(bw>.15){rc(76.5,32-bw/2,22,bw,'rgba(0,0,0,'+Math.min(.9,.2+S.out*.06)+')')}
+  S.vo.forEach(q=>ci(q.x+2.5,32,.5,'#fff'));tx(bw>.4?'Haz láser':'sin haz',89,38,3);
+  tx('Energía de bombeo',45,7,3);rc(24,9,42,3,'#fff','#111');rc(24,9,42*pf,3,'#111');
+  tx('Fotones en la cavidad: '+S.ph.length,45,59,2.8,'#555');
+  return[['Átomos excitados',Math.round(pf*100)+' %'],['Fotones',S.ph.length],['Estado',bw>.4?'Emite láser':pf>.3?'Casi en umbral':'Luz débil sin amplificar']]}},
+{n:'Telescopio refractor',sl:{l:'Distancia focal del ocular',min:4,max:14,step:.5,v:8,u:' cm'},
+ steps:['El objetivo (lente grande) recoge la luz de un astro lejano y forma una imagen real en su foco.','Esa imagen intermedia queda invertida.','El ocular, una lente pequeña, actúa como lupa sobre esa imagen.','El aumento angular es M = f(objetivo) / f(ocular).'],use:'Observar la Luna, los planetas y las estrellas dobles; también lentes de cámaras y catalejos.',f:'M = f_obj / f_ocular',
+ draw(){const fo=48,x0=14,xf=x0+fo,xe=xf+p,sl=.12,Y0=31;rc(x0,Y0-10,xe+6-x0,20,'rgba(0,0,0,.04)','#aaa');
+  const hs=[-7,0,7];
+  [[0,'#111'],[sl,'#777']].forEach(([sp,col])=>{const fy=fo*sp;hs.forEach(h=>{ln(2,Y0+h-sp*(x0-2),x0,Y0+h,.3,col);ln(x0,Y0+h,xf,Y0+fy,.3,col);const sl2=(fy-h)/fo,ye=fy+p*sl2;ln(xf,Y0+fy,xe,Y0+ye,.3,col);const so=-fy/p;ln(xe,Y0+ye,xe+30,Y0+ye+so*30,.3,col)})});
+  glass(x0,Y0,10,2.4,true);glass(xe,Y0,6,1.6,true);ln(xf,Y0-9,xf,Y0+9,.2,'#999',1);
+  tx('Objetivo',x0,Y0-13,2.8);tx('Ocular',xe,Y0-13,2.8);tx('Plano focal',xf,Y0+14.5,2.6,'#555');arr(xf,Y0+fo*sl+4,-5.8,'#777',1.3);tx('imagen invertida',xf,Y0+23,2.6,'#555');
+  ci(92,Y0+3,3,'#fff','#111',.4);ci(92.7,Y0+3,1.2,'#111');tx('ojo',92,Y0+9,2.6,'#555');
+  tx('Estrella lejana',8,Y0-14,2.8,'#555');tx('f objetivo = 48 cm',x0+fo/2,57,2.8,'#555');ln(x0,54,xf,54,.3,'#555');
+  const M=fo/p;return[['Aumento M',M.toFixed(1)+'×'],['Ángulo de la rama gris',(Math.atan(sl)*57.3).toFixed(1)+'°'],['Ángulo al salir',(Math.atan(sl*M)*57.3).toFixed(1)+'°']]}},
+{n:'Telescopio reflector',sl:{l:'Distancia focal del espejo',min:30,max:50,step:1,v:40,u:' cm'},
+ steps:['La luz entra por el tubo y llega a un espejo primario cóncavo (parabólico).','El espejo la refleja y la concentra en su foco.','Un pequeño espejo plano a 45° desvía los rayos hacia el costado (diseño Newton).','El ocular amplía la imagen. Los espejos no tienen aberración cromática y pueden ser enormes.'],use:'Astronomía aficionada y profesional: los grandes observatorios usan espejos de varios metros.',f:'Espejo parabólico: foco a f = R / 2',
+ draw(){const mx=86,F=p,xf=mx-F,xs=xf+11,k=11,R=8,Y0=34;
+  rc(12,Y0-R,mx-12+1,2*R,'rgba(0,0,0,.04)','#999');
+  const my=(y)=>mx-y*y/(4*F);
+  g.beginPath();for(let y=-R;y<=R;y+=.4)g.lineTo(my(y),Y0+y);for(let y=R;y>=-R;y-=.4)g.lineTo(my(y)+2,Y0+y);g.closePath();const gr=g.createLinearGradient(0,Y0-R,0,Y0+R);[[0,'#f5f5f5'],[.3,'#9aa0a6'],[.55,'#e9ebec'],[.8,'#858b91'],[1,'#d9dcde']].forEach(a=>gr.addColorStop(a[0],a[1]));g.fillStyle=gr;g.fill();g.lineWidth=.35;g.strokeStyle='#222';g.stroke();
+  [-6,-3,3,6].forEach(y=>{const hx=my(y),u=(xs-hx-y)/((xf-hx)-y),px=hx+u*(xf-hx),py=y*(1-u);ln(0,Y0+y,hx,Y0+y,.3);ln(hx,Y0+y,px,Y0+py,.3);ln(px,Y0+py,xs,Y0-k,.3)});
+  ln(0,Y0,mx-1,Y0,.15,'#999',1);poly([[xs-2.2,Y0-2.2],[xs+2.2,Y0+2.2],[xs+2.2,Y0+3.6],[xs-3.6,Y0-2.2]],'#ccd','#111',.3);
+  rc(xs-1,Y0-R-2.5,2,2.5,'#555');glass(xs,Y0-k-3.6,3.6,1.2,true);
+  tx('Espejo primario',mx-10,Y0+R+6,2.8);tx('Espejo secundario',xs-6,Y0+R+6,2.8);tx('Ocular',xs,Y0-k-9,2.8);ci(xs,Y0-k,.9,'#111');tx('foco',xs+5,Y0-k+1,2.6,'#555','left');
+  ln(xf,Y0+R+10,mx,Y0+R+10,.3,'#555');tx('f = '+F+' cm',(xf+mx)/2,Y0+R+14,2.8,'#555');
+  tx('Luz de una estrella lejana →',22,Y0-14,2.8,'#555');
+  return[['Distancia focal',F+' cm'],['Aberración cromática','Ninguna (usa espejos)'],['Tipo','Newton']]}},
+{n:'Radiotelescopio',sl:{l:'Diámetro del plato',min:12,max:44,step:1,v:24,u:' m'},
+ steps:['Un gran plato parabólico recoge las ondas de radio que llegan del espacio.','Las concentra en el foco, donde una antena receptora capta la señal.','La señal débil se amplifica y se envía a un computador.','Cuanto mayor es el plato, más nítido es el detalle: θ ≈ 1,22 · λ / D.'],use:'Estudiar galaxias, púlsares y nubes de hidrógeno, buscar señales cósmicas y seguir sondas espaciales.',f:'θ ≈ 1,22 · λ / D',
+ draw(){const F=18,vx=30,vy=57,h=p/2,fy=vy-F,pa=y=>vy-y*y/(4*F);
+  ci(vx,fy,1,'#111');
+  for(let k=0;k<6;k++){const yy=5+((t*10+k*8)%48);if(yy<vy-F*0)ln(vx-h,yy,vx+h,yy,.25,'rgba(0,0,0,.25)')}
+  [-.8,-.4,0,.4,.8].forEach(q=>{const xx=q*h,ry=pa(xx);ln(vx+xx,3,vx+xx,ry,.3,'#999');ln(vx+xx,ry,vx,fy,.3,'#111')});
+  g.beginPath();for(let x=-h;x<=h;x+=.5)g.lineTo(vx+x,pa(x));for(let x=h;x>=-h;x-=.5)g.lineTo(vx+x,pa(x)+1.2);g.closePath();g.fillStyle='#ccc';g.fill();g.lineWidth=.35;g.strokeStyle='#222';g.stroke();
+  ln(vx-h*.6,pa(-h*.6),vx-1,fy+1,.3,'#555');ln(vx+h*.6,pa(h*.6),vx+1,fy+1,.3,'#555');rc(vx-1.4,fy-2.2,2.8,3.4,'#111');
+  ln(vx,vy+1,vx,60,.8,'#555');tx('Antena en el foco',vx,fy-5,2.7);tx('Plato',vx,61.5,2.7,'#555');
+  tx('Ondas de radio del espacio',vx,7,2.7,'#555');
+  const sig=60/p,sep=5;const bx=64,bw=33,by=12,bh=22;rc(bx,by,bw,bh,'#fff','#aaa');tx('Señal captada de 2 fuentes',bx+bw/2,by-1.5,2.7);
+  const pr=[];for(let i=0;i<=100;i++){const x=(i/100-.5)*30,v=Math.exp(-(((x-sep)/sig)**2)/2)+Math.exp(-(((x+sep)/sig)**2)/2);pr.push([bx+bw/2+x,by+bh-1-Math.min(1.1,v)*bh*.78])}path(pr,.5,'#111');
+  [-sep,sep].forEach(x=>ln(bx+bw/2+x,by+bh-1,bx+bw/2+x,by+bh-4,.4,'#888',1));
+  const my2=46;rc(bx,38,bw,20,'#111');tx('Mapa del cielo',bx+bw/2,36.5,2.7);
+  [-sep,sep].forEach(x=>{const rr=Math.max(1.2,sig*1.1),gr=g.createRadialGradient(bx+bw/2+x*.9,48,0,bx+bw/2+x*.9,48,rr*2.2);gr.addColorStop(0,'rgba(255,255,255,.95)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(bx,38,bw,20)});
+  const res=2*sep>2.3*sig;tx(res?'Se distinguen dos fuentes':'Se ven como una sola',bx+bw/2,61.5,2.8,res?'#111':'#555');
+  return[['Diámetro D',p+' m'],['Ancho del haz (rel.)',(sig/ (60/44)).toFixed(2)+'×'],['Resolución',res?'Buena':'Insuficiente']]}},
+{n:'Fibra óptica',sl:{l:'Ángulo de entrada',min:0,max:30,step:.5,v:8,u:'°'},
+ steps:['Un emisor (LED o láser) lanza pulsos de luz dentro de un hilo de vidrio muy fino.','El núcleo tiene mayor índice de refracción que el revestimiento.','Si la luz llega con ángulo suficiente, sufre reflexión total interna y rebota sin salir.','Así viaja kilómetros con poca pérdida hasta el receptor.'],use:'Internet y telefonía de alta velocidad, cables submarinos, televisión por cable y endoscopios médicos.',f:'sen θc = n₂ / n₁    (θc ≈ 80,6°)',
+ draw(){const n1=1.48,n2=1.46,th=p*Math.PI/180,r=Math.asin(Math.sin(th)/n1),cyy=32,hw=6,m=Math.tan(r),tir=(Math.PI/2-r)>=Math.asin(n2/n1)-1e-9;
+  rc(10,cyy-hw-5,80,2*hw+10,'#d6d9dd','#666');rc(10,cyy-hw,80,2*hw,'#fff','#111');
+  tx('Revestimiento (n₂ = 1,46)',50,cyy-hw-7,2.8,'#555');tx('Núcleo (n₁ = 1,48)',50,cyy+hw+9,2.8,'#555');
+  ci(6,cyy,3,'#fff','#111',.4);ci(6,cyy,1.4,'#111');tx('Emisor',6,cyy+9,2.6,'#555');rc(90,cyy-4,4,8,'#999','#111');tx('Receptor',92,cyy+9,2.6,'#555');
+  const P=[[10,cyy]];let x=10,y=cyy,dir=-1,leak=null;
+  if(m<.002)P.push([90,cyy]);else{for(let n=0;n<30&&x<90;n++){const dy=dir<0?y-(cyy-hw):(cyy+hw)-y,dx=dy/m;if(x+dx>=90){P.push([90,y+dir*(90-x)*m]);break}x+=dx;y+=dir*dy;P.push([x,y]);if(!tir){leak=[x,y,dir];break}dir=-dir}}
+  ln(0,cyy-6.5,10,cyy,.3,'#777');ln(0,cyy+ (cyy-(cyy-6.5)),10,cyy,.0,'#fff');
+  path(P,.5,'#111');
+  if(leak){const phi=Math.PI/2-r,sp=Math.min(1,n1/n2*Math.sin(phi)),ps=Math.asin(sp),sx=Math.tan(ps),L=14;ln(leak[0],leak[1],leak[0]+sx*L,leak[1]+leak[2]*L,.4,'#111',1);tx('¡La luz se escapa!',50,10,3.6)}
+  else{const L=plen(P);for(let k=0;k<4;k++){const q=along(P,(t*28+k*L/4)%L);ci(q[0],q[1],1,'#111')}tx('Reflexión total interna',50,10,3.6)}
+  const mx=Math.asin(Math.sqrt(n1*n1-n2*n2))*57.3;
+  return[['Ángulo de entrada',p.toFixed(1)+'°'],['Ángulo máximo de aceptación',mx.toFixed(1)+'°'],['Estado',tir?'Luz guiada':'Pérdida de luz']]}}
+];
+function size(){const r=cv.getBoundingClientRect(),dp=Math.min(devicePixelRatio||1,2);if(cv.width!==Math.round(r.width*dp)){cv.width=Math.round(r.width*dp);cv.height=Math.round(r.height*dp)}s=r.width/W;g.setTransform(dp*s,0,0,dp*s,0,0)}
+function setDev(i){cur=i;S={};const d=D[i],sl=d.sl;$('tabs').innerHTML=D.map((x,k)=>'<button class="tab'+(k===i?' on':'')+'" data-k="'+k+'">'+x.n+'</button>').join('');
+ document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setDev(+b.dataset.k));
+ const e=$('sl');e.min=sl.min;e.max=sl.max;e.step=sl.step;e.value=sl.v;p=sl.v;$('sll').textContent=sl.l;e.oninput=()=>{p=+e.value;$('slv').textContent=p+sl.u};$('slv').textContent=p+sl.u;
+ $('info').innerHTML='<h2>'+d.n+'</h2><h3>Cómo funciona</h3><ol>'+d.steps.map(q=>'<li>'+q+'</li>').join('')+'</ol><div class="eq">'+d.f+'</div><h3>Para qué sirve</h3><p class="law" style="margin-top:4px">'+d.use+'</p>'}
+let last=performance.now(),lr='';
+function frame(now){const dt=(now-last)/1000;last=now;t+=Math.min(dt,.05);size();
+ const bg=g.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#f0f1f3');bg.addColorStop(1,'#d9dcdf');g.fillStyle=bg;g.fillRect(0,0,W,H);
+ const rd=D[cur].draw(dt);const h=rd.map(a=>'<div>'+a[0]+'<strong>'+a[1]+'</strong></div>').join('');if(h!==lr){$('read').innerHTML=h;lr=h}
+ requestAnimationFrame(frame)}
+setDev(0);requestAnimationFrame(frame);
+</script>
+</body>
+</html>
